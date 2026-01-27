@@ -1,0 +1,20 @@
+# Build outputs
+.output/
+dist/
+.nuxt/
+.DS_Store
+*.log
+
+# Dependencies
+node_modules/
+package-lock.json
+
+# Environment
+.env
+.env.*
+!*.example
+service-account.json
+
+# IDE
+.vscode/
+.idea/
