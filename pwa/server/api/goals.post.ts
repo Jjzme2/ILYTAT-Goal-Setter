@@ -64,11 +64,19 @@ export default defineEventHandler(async (event) => {
         await docRef.set(payload, { merge: true });
 
         return { success: true, id: docId };
-    } catch (e) {
-        console.error('Error saving goal:', e);
+    } catch (e: unknown) {
+        const error = e as Error & { code?: string };
+        console.error('=== GOAL API ERROR ===');
+        console.error('Error Name:', error?.name);
+        console.error('Error Message:', error?.message);
+        console.error('Error Code:', error?.code);
+        console.error('Error Stack:', error?.stack);
+        console.error('Request Body:', JSON.stringify(body, null, 2));
+        console.error('=== END ERROR ===');
+
         throw createError({
             statusCode: 500,
-            statusMessage: 'Internal Server Error',
+            statusMessage: error?.message || 'Internal Server Error',
         });
     }
 });
