@@ -3,6 +3,7 @@ import isoWeek from 'dayjs/plugin/isoWeek.js';
 import quarterOfYear from 'dayjs/plugin/quarterOfYear.js';
 import { FieldValue } from 'firebase-admin/firestore';
 import { useFirebase } from '../utils/firebase';
+import { requireAuth } from '../utils/auth';
 
 dayjs.extend(isoWeek);
 dayjs.extend(quarterOfYear);
@@ -28,6 +29,9 @@ function getDocId(timeframe: string, dateStr?: string) {
 }
 
 export default defineEventHandler(async (event) => {
+    // Require authentication
+    const user = await requireAuth(event);
+
     const db = useFirebase();
     const body = await readBody(event);
     const { timeframe, data, date } = body;
@@ -47,7 +51,9 @@ export default defineEventHandler(async (event) => {
             throw createError({ statusCode: 400, statusMessage: 'Invalid timeframe' });
         }
 
-        const docRef = db.collection(COLLECTIONS[tfKey]).doc(docId);
+        // User-scoped path: users/{uid}/{timeframe}-logs/{docId}
+        const docRef = db.collection('users').doc(user.uid)
+            .collection(COLLECTIONS[tfKey]).doc(docId);
 
         // Ensure critical fields
         const payload = {

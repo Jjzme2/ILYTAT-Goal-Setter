@@ -12,92 +12,56 @@ export const useFirebase = () => {
     const apps = getApps();
 
     if (apps.length) {
-        console.log('[Firebase] Using existing app');
         db = getFirestore(apps[0]);
         return db;
     }
 
     let serviceAccount;
-    let credSource = 'none';
 
     // 1. Try individual environment variables (Vercel/Netlify/Heroku)
-    const hasEnvVars = !!(process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PRIVATE_KEY);
-    console.log('[Firebase] Env vars present:', hasEnvVars);
-    console.log('[Firebase] PROJECT_ID exists:', !!process.env.FIREBASE_PROJECT_ID);
-    console.log('[Firebase] CLIENT_EMAIL exists:', !!process.env.FIREBASE_CLIENT_EMAIL);
-    console.log('[Firebase] PRIVATE_KEY exists:', !!process.env.FIREBASE_PRIVATE_KEY);
-    console.log('[Firebase] PRIVATE_KEY length:', process.env.FIREBASE_PRIVATE_KEY?.length || 0);
+    if (process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PRIVATE_KEY) {
+        let privateKey = process.env.FIREBASE_PRIVATE_KEY;
 
-    if (hasEnvVars) {
-        credSource = 'env';
-        let rawKey = process.env.FIREBASE_PRIVATE_KEY!;
-
-        console.log('[Firebase] Raw key length:', rawKey.length);
-        console.log('[Firebase] Raw key starts with:', rawKey.substring(0, 50));
-
-        // Handle JSON-stringified keys (wrapped in quotes)
-        if (rawKey.startsWith('"') && rawKey.endsWith('"')) {
+        // If the key is wrapped in quotes (JSON string), parse it to decode \n properly
+        if (privateKey.startsWith('"') && privateKey.endsWith('"')) {
             try {
-                rawKey = JSON.parse(rawKey);
-                console.log('[Firebase] Parsed JSON-wrapped key');
+                privateKey = JSON.parse(privateKey);
             } catch {
-                console.log('[Firebase] JSON parse failed, using as-is');
+                // If parse fails, try the replace method
+                privateKey = privateKey.slice(1, -1).replace(/\\n/g, '\n');
             }
+        } else {
+            // No quotes - just replace escaped newlines
+            privateKey = privateKey.replace(/\\n/g, '\n');
         }
-
-        // Handle multiple escape formats
-        // 1. Double-escaped: \\n -> \n -> actual newline  
-        // 2. Single-escaped: \n -> actual newline
-        let processedKey = rawKey
-            .replace(/\\\\n/g, '\n')  // Handle \\n (double-escaped)
-            .replace(/\\n/g, '\n');    // Handle \n (single-escaped)
-
-        console.log('[Firebase] Processed key starts with:', processedKey.substring(0, 50));
-        console.log('[Firebase] Key contains BEGIN PRIVATE KEY:', processedKey.includes('-----BEGIN PRIVATE KEY-----'));
-        console.log('[Firebase] Key contains actual newlines:', processedKey.includes('\n'));
 
         serviceAccount = {
             projectId: process.env.FIREBASE_PROJECT_ID,
             clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-            privateKey: processedKey
+            privateKey: privateKey
         };
     }
 
     // 2. Fallback: Local file (for local dev compatibility with CLI)
     if (!serviceAccount) {
         const localPath = path.join(os.homedir(), '.config/ilytat goal setter/service-account.json');
-        console.log('[Firebase] Checking local path:', localPath);
         if (fs.existsSync(localPath)) {
             try {
                 serviceAccount = JSON.parse(fs.readFileSync(localPath, 'utf-8'));
-                credSource = 'local-file';
-                console.log('[Firebase] Loaded from local file');
             } catch (e) {
-                console.error('[Firebase] Failed to read local service account', e);
+                console.error('Failed to read local service account', e);
             }
         }
     }
 
     if (!serviceAccount) {
-        console.error('[Firebase] No credentials found!');
         throw new Error('Firebase Config Missing. Set FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, and FIREBASE_PRIVATE_KEY env vars.');
     }
 
-    console.log('[Firebase] Credential source:', credSource);
-    console.log('[Firebase] Project ID:', serviceAccount.projectId);
-    console.log('[Firebase] Client Email:', serviceAccount.clientEmail);
-
-    try {
-        initializeApp({
-            credential: cert(serviceAccount)
-        });
-        console.log('[Firebase] App initialized successfully');
-    } catch (initError) {
-        console.error('[Firebase] App initialization failed:', initError);
-        throw initError;
-    }
+    initializeApp({
+        credential: cert(serviceAccount)
+    });
 
     db = getFirestore();
-    console.log('[Firebase] Firestore instance created');
     return db;
 }

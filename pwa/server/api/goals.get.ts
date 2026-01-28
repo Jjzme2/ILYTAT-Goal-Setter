@@ -2,6 +2,7 @@ import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek.js';
 import quarterOfYear from 'dayjs/plugin/quarterOfYear.js';
 import { useFirebase } from '../utils/firebase';
+import { requireAuth } from '../utils/auth';
 
 dayjs.extend(isoWeek);
 dayjs.extend(quarterOfYear);
@@ -27,6 +28,9 @@ function getDocId(timeframe: string, dateStr?: string) {
 }
 
 export default defineEventHandler(async (event) => {
+    // Require authentication
+    const user = await requireAuth(event);
+
     const db = useFirebase();
     const query = getQuery(event);
     const dateStr = query.date as string | undefined;
@@ -34,10 +38,15 @@ export default defineEventHandler(async (event) => {
     const timeframes = ['daily', 'weekly', 'monthly', 'quarterly', 'yearly'];
     const results: Record<string, any> = {};
 
+    // Fetch from user-scoped subcollections
     await Promise.all(timeframes.map(async (tf) => {
         try {
             const docId = getDocId(tf, dateStr);
-            const docRef = db.collection(COLLECTIONS[tf as keyof typeof COLLECTIONS]).doc(docId);
+            const collectionName = COLLECTIONS[tf as keyof typeof COLLECTIONS];
+
+            // User-scoped path: users/{uid}/{timeframe}-logs/{docId}
+            const docRef = db.collection('users').doc(user.uid)
+                .collection(collectionName).doc(docId);
             const doc = await docRef.get();
 
             results[tf] = doc.exists ? doc.data() : { goals: [] };
