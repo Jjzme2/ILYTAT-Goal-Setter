@@ -30,12 +30,31 @@ export const useFirebase = () => {
 
     if (hasEnvVars) {
         credSource = 'env';
-        const rawKey = process.env.FIREBASE_PRIVATE_KEY!;
-        const processedKey = rawKey.replace(/\\n/g, '\n');
+        let rawKey = process.env.FIREBASE_PRIVATE_KEY!;
 
-        console.log('[Firebase] Raw key starts with:', rawKey.substring(0, 30));
-        console.log('[Firebase] Raw key contains literal \\n:', rawKey.includes('\\n'));
-        console.log('[Firebase] Processed key starts with:', processedKey.substring(0, 30));
+        console.log('[Firebase] Raw key length:', rawKey.length);
+        console.log('[Firebase] Raw key starts with:', rawKey.substring(0, 50));
+
+        // Handle JSON-stringified keys (wrapped in quotes)
+        if (rawKey.startsWith('"') && rawKey.endsWith('"')) {
+            try {
+                rawKey = JSON.parse(rawKey);
+                console.log('[Firebase] Parsed JSON-wrapped key');
+            } catch {
+                console.log('[Firebase] JSON parse failed, using as-is');
+            }
+        }
+
+        // Handle multiple escape formats
+        // 1. Double-escaped: \\n -> \n -> actual newline  
+        // 2. Single-escaped: \n -> actual newline
+        let processedKey = rawKey
+            .replace(/\\\\n/g, '\n')  // Handle \\n (double-escaped)
+            .replace(/\\n/g, '\n');    // Handle \n (single-escaped)
+
+        console.log('[Firebase] Processed key starts with:', processedKey.substring(0, 50));
+        console.log('[Firebase] Key contains BEGIN PRIVATE KEY:', processedKey.includes('-----BEGIN PRIVATE KEY-----'));
+        console.log('[Firebase] Key contains actual newlines:', processedKey.includes('\n'));
 
         serviceAccount = {
             projectId: process.env.FIREBASE_PROJECT_ID,
