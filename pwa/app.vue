@@ -179,56 +179,58 @@
           </div>
 
           <!-- Goals List -->
-          <TransitionGroup name="list" tag="div" class="space-y-3">
-            <div 
-              v-for="(goal, idx) in currentGoals" 
-              :key="goal.id"
-              class="group p-4 rounded-xl border border-gray-800/50 flex items-start gap-3 transition-all hover:opacity-90 touch-manipulation"
-              :class="{ 'opacity-60': goal.completed }"
-              :style="{ backgroundColor: currentTheme.colors.surface }"
-            >
-              <button 
-                @click="toggleGoal(idx)"
-                class="mt-0.5 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors shrink-0"
-                :class="goal.completed ? 'bg-green-500 border-green-500 text-white' : 'border-gray-600 text-transparent hover:border-gray-400'"
-                :style="goal.completed ? {} : { borderColor: currentTimeframeConfig.color }"
+          <TransitionGroup name="list" tag="div" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              <div 
+                v-for="(goal, idx) in currentGoals" 
+                :key="goal.id"
+                class="group p-4 rounded-xl border border-gray-800/50 flex flex-col gap-3 transition-all hover:opacity-90 touch-manipulation h-full"
+                :class="{ 'opacity-60': goal.completed }"
+                :style="{ backgroundColor: currentTheme.colors.surface }"
               >
-                <CheckIcon class="w-3.5 h-3.5" />
-              </button>
-              
-              <div class="flex-1 min-w-0">
-                  <p 
-                    class="text-sm leading-relaxed transition-all decoration-2 decoration-gray-500"
-                    :class="{ 'line-through text-gray-500': goal.completed, 'text-gray-200': !goal.completed }"
+                <div class="flex items-start justify-between w-full">
+                  <button 
+                    @click="toggleGoal(idx)"
+                    class="mt-0.5 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors shrink-0"
+                    :class="goal.completed ? 'bg-green-500 border-green-500 text-white' : 'border-gray-600 text-transparent hover:border-gray-400'"
+                    :style="goal.completed ? {} : { borderColor: currentTimeframeConfig.color }"
                   >
-                    {{ goal.text }}
-                  </p>
-                  <div class="flex items-center gap-2 mt-1">
-                      <span 
-                        v-if="goal.priority && goal.priority !== 'medium'"
-                        class="text-[10px] px-1.5 py-0.5 rounded uppercase font-bold tracking-wider"
-                        :class="goal.priority === 'high' ? 'bg-red-500/20 text-red-400' : 'bg-green-500/20 text-green-400'"
-                      >
-                        {{ goal.priority }}
-                      </span>
-                      <span 
-                        v-if="goal.category"
-                        class="text-[10px] px-1.5 py-0.5 rounded border border-gray-700 text-gray-400"
-                      >
-                        {{ goal.category }}
-                      </span>
-                      <p v-if="goal.description" class="text-xs text-gray-500 line-clamp-1">{{ goal.description }}</p>
-                  </div>
+                    <CheckIcon class="w-3.5 h-3.5" />
+                  </button>
+                  
+                  <button 
+                    @click="deleteGoal(idx)"
+                    class="opacity-0 group-hover:opacity-100 p-1 text-gray-500 hover:text-red-400 transition-opacity"
+                  >
+                    <Trash2Icon class="w-4 h-4" />
+                  </button>
                 </div>
-
-              <button 
-                @click="deleteGoal(idx)"
-                class="opacity-0 group-hover:opacity-100 p-1 text-gray-500 hover:text-red-400 transition-opacity"
-              >
-                <Trash2Icon class="w-4 h-4" />
-              </button>
-            </div>
-          </TransitionGroup>
+                
+                <div class="flex-1 min-w-0">
+                    <p 
+                      class="text-sm leading-relaxed transition-all decoration-2 decoration-gray-500 line-clamp-2"
+                      :class="{ 'line-through text-gray-500': goal.completed, 'text-gray-200': !goal.completed }"
+                    >
+                      {{ goal.text }}
+                    </p>
+                    <div class="flex flex-wrap items-center gap-2 mt-2">
+                        <span 
+                          v-if="goal.priority && goal.priority !== 'medium'"
+                          class="text-[10px] px-1.5 py-0.5 rounded uppercase font-bold tracking-wider"
+                          :class="goal.priority === 'high' ? 'bg-red-500/20 text-red-400' : 'bg-green-500/20 text-green-400'"
+                        >
+                          {{ goal.priority }}
+                        </span>
+                        <span 
+                          v-if="goal.category"
+                          class="text-[10px] px-1.5 py-0.5 rounded border border-gray-700 text-gray-400"
+                        >
+                          {{ goal.category }}
+                        </span>
+                    </div>
+                     <p v-if="goal.description" class="text-xs text-gray-500 line-clamp-2 mt-1">{{ goal.description }}</p>
+                  </div>
+              </div>
+            </TransitionGroup>
 
           <div v-if="currentGoals.length === 0" class="flex flex-col items-center justify-center py-12 text-gray-600">
             <TargetIcon class="w-12 h-12 mb-3 opacity-20" />
@@ -275,10 +277,11 @@
             >
             <div class="flex flex-wrap gap-2">
                 <button 
-                    v-for="cat in ['Work', 'Personal', 'Family', 'Health']"
+                    v-for="cat in categories"
                     :key="cat"
                     @click="newGoalCategory = cat"
-                    class="px-2 py-1 rounded text-[10px] font-medium border border-gray-700 hover:bg-gray-800 transition-colors text-gray-400"
+                    class="px-2 py-1 rounded text-[10px] font-medium border border-gray-700 hover:bg-gray-800 transition-colors"
+                    :class="newGoalCategory === cat ? 'bg-white/10 text-white border-white' : 'text-gray-400'"
                 >
                     {{ cat }}
                 </button>
@@ -397,15 +400,51 @@
               <p class="text-xs text-gray-500">Version 1.2.0 • Multi-User Goal Tracker</p>
             </div>
             
-            <!-- Connection -->
+            <!-- Quick Categories -->
             <div class="p-4 rounded-lg border border-gray-800" :style="{ backgroundColor: currentTheme.colors.background }">
-               <h4 class="font-medium text-sm text-gray-300 mb-1">Connection</h4>
-               <p class="text-xs text-gray-500 flex items-center gap-2">
-                 <span class="w-2 h-2 rounded-full" :class="isConnected ? 'bg-green-500' : 'bg-red-500'"></span>
-                 {{ isConnected ? 'Connected to Firebase' : 'Offline Mode' }}
-               </p>
+               <h4 class="font-medium text-sm text-gray-300 mb-3">Quick Categories</h4>
+               <div class="flex flex-wrap gap-2 mb-3">
+                 <div 
+                   v-for="cat in categories" 
+                   :key="cat"
+                   class="flex items-center gap-1 px-2 py-1 rounded bg-gray-800 border border-gray-700 text-xs text-gray-300"
+                 >
+                   {{ cat }}
+                   <button @click="removeCategory(cat)" class="hover:text-red-400 flex items-center justify-center p-0.5">
+                     <span class="sr-only">Remove</span>
+                     <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                   </button>
+                 </div>
+               </div>
+               
+               <div class="flex gap-2">
+                 <input 
+                   v-model="newCategoryInput"
+                   type="text" 
+                   @keyup.enter="handleAddCategory"
+                   class="flex-1 bg-gray-900 border border-gray-700 rounded px-3 py-1.5 text-xs text-white focus:outline-none focus:border-gray-500"
+                   placeholder="New category..."
+                 />
+                 <button 
+                   @click="handleAddCategory"
+                   class="px-3 py-1.5 rounded text-xs font-medium text-white transition-opacity hover:opacity-90"
+                   :style="{ backgroundColor: currentTheme.colors.primary }"
+                   :disabled="!newCategoryInput.trim()"
+                 >
+                   Add
+                 </button>
+               </div>
             </div>
-          </div>
+
+             <!-- Connection -->
+             <div class="p-4 rounded-lg border border-gray-800" :style="{ backgroundColor: currentTheme.colors.background }">
+                <h4 class="font-medium text-sm text-gray-300 mb-1">Connection</h4>
+                <p class="text-xs text-gray-500 flex items-center gap-2">
+                  <span class="w-2 h-2 rounded-full" :class="isConnected ? 'bg-green-500' : 'bg-red-500'"></span>
+                  {{ isConnected ? 'Connected to Firebase' : 'Offline Mode' }}
+                </p>
+             </div>
+           </div>
 
           <button 
             @click="showSettings = false"
@@ -433,6 +472,7 @@ import quarterOfYear from 'dayjs/plugin/quarterOfYear'
 import { useAuth } from '~/composables/useAuth'
 import { useStreaks } from '~/composables/useStreaks'
 import { useTheme } from '~/composables/useTheme'
+import { useSettings } from '~/composables/useSettings'
 import StreakBadge from '~/components/StreakBadge.vue'
 
 dayjs.extend(isoWeek)
@@ -442,6 +482,7 @@ dayjs.extend(quarterOfYear)
 const { user, loading: authLoading, authError, isLoggedIn, displayName, photoURL, email, login, logout, getIdToken, initAuth, clearError } = useAuth()
 const { stats, fetchStats, recordDailyCompletion, BADGES } = useStreaks()
 const { themes, currentTheme, setTheme, initTheme } = useTheme()
+const { categories, fetchSettings, addCategory, removeCategory } = useSettings()
 const showUserMenu = ref(false)
 
 // Login form
@@ -503,6 +544,7 @@ const newGoalDescription = ref('')
 const newGoalPriority = ref('medium')
 const newGoalCategory = ref('')
 const newGoalNotes = ref('')
+const newCategoryInput = ref('')
 const selectedDate = ref(dayjs().format('YYYY-MM-DD'))
 
 const goalInput = ref<HTMLInputElement | null>(null)
@@ -534,7 +576,7 @@ const formattedDate = computed(() => {
 const isConnected = computed(() => isOnline.value)
 const currentTimeframeConfig = computed(() => timeframes.find(t => t.key === currentTimeframe.value)!)
 
-const currentGoals = computed(() => {
+const currentGoals = computed((): any[] => {
     const key = currentTimeframe.value
     return goalData.value[key]?.goals || []
 })
@@ -584,6 +626,12 @@ async function saveLog(timeframe: string) {
     } catch (e) {
         console.error('Error saving', e)
     }
+}
+
+async function handleAddCategory() {
+    if (!newCategoryInput.value.trim()) return
+    await addCategory(newCategoryInput.value)
+    newCategoryInput.value = ''
 }
 
 // --- METHODS ---
@@ -691,6 +739,7 @@ watch(isLoggedIn, (loggedIn) => {
     if (loggedIn) {
         fetchAllData()
         fetchStats()
+        fetchSettings()
     }
 })
 
