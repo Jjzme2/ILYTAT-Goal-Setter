@@ -8,7 +8,7 @@ export default defineNuxtPlugin(() => {
     if (getApps().length > 0) {
         return {
             provide: {
-                firebaseAuth: getAuth()
+                firebaseAuth: getAuth(getApps()[0])
             }
         }
     }

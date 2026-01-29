@@ -5,9 +5,14 @@ dist/
 .DS_Store
 *.log
 
+# Generated TypeScript files
+*.js
+*.js.map
+*.d.ts
+*.d.ts.map
+
 # Dependencies
 node_modules/
-package-lock.json
 
 # Environment
 .env

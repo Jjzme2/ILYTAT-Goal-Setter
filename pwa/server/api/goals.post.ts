@@ -72,17 +72,23 @@ export default defineEventHandler(async (event) => {
         return { success: true, id: docId };
     } catch (e: unknown) {
         const error = e as Error & { code?: string };
-        console.error('=== GOAL API ERROR ===');
-        console.error('Error Name:', error?.name);
-        console.error('Error Message:', error?.message);
-        console.error('Error Code:', error?.code);
-        console.error('Error Stack:', error?.stack);
-        console.error('Request Body:', JSON.stringify(body, null, 2));
-        console.error('=== END ERROR ===');
+        // Create a safe error object for logging
+        const safeError = {
+            name: error?.name,
+            message: error?.message,
+            code: error?.code
+        };
+
+        console.error('=== GOAL API ERROR ===', safeError);
+
+        // Don't leak internal errors to the client
+        // Only pass through specific status codes we knowingly threw
+        const statusCode = (e as any)?.statusCode || 500;
+        const statusMessage = statusCode === 500 ? 'Internal Server Error' : ((e as any)?.statusMessage || 'Internal Server Error');
 
         throw createError({
-            statusCode: 500,
-            statusMessage: error?.message || 'Internal Server Error',
+            statusCode,
+            statusMessage,
         });
     }
 });

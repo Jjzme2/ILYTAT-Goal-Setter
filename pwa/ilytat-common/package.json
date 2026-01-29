@@ -1,0 +1,26 @@
+{
+    "name": "@ilytat/common",
+    "version": "1.0.0",
+    "description": "Common Data Utility for ILYTAT",
+    "main": "index.ts",
+    "scripts": {
+        "test": "echo \"Error: no test specified\" && exit 1",
+        "wizard": "tsx scripts/data-wizard.ts"
+    },
+    "keywords": [
+        "common",
+        "ilytat",
+        "api"
+    ],
+    "author": "ILYTAT",
+    "license": "ISC",
+    "devDependencies": {
+        "@types/prompts": "^2.4.9",
+        "clipboardy": "^3.0.0",
+        "prompts": "^2.4.2",
+        "tsx": "^4.21.0"
+    },
+    "dependencies": {
+        "@ilytat/utils": "^1.0.0"
+    }
+}

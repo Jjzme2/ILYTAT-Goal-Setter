@@ -65,6 +65,12 @@
           <ChevronRightIcon class="w-5 h-5" />
         </button>
       </div>
+
+      <!-- Daily Quote -->
+      <div v-if="quote" class="mb-4 px-1 text-center animate-fade-in group relative">
+          <p class="text-[11px] text-gray-400 italic font-medium leading-relaxed">"{{ quote.content }}"</p>
+          <p class="text-[9px] text-gray-500 mt-1 uppercase tracking-widest font-bold opacity-0 group-hover:opacity-100 transition-opacity absolute w-full bottom-[-14px]">- {{ quote.author }} -</p>
+      </div>
       </header>
 
       <!-- Login Form -->
@@ -197,12 +203,29 @@
                     <CheckIcon class="w-3.5 h-3.5" />
                   </button>
                   
-                  <button 
-                    @click="deleteGoal(idx)"
-                    class="opacity-0 group-hover:opacity-100 p-1 text-gray-500 hover:text-red-400 transition-opacity"
-                  >
-                    <Trash2Icon class="w-4 h-4" />
-                  </button>
+                  <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                     <button 
+                        @click="openAddModal(goal)"
+                        class="p-1 text-gray-500 hover:text-blue-400 transition-colors"
+                        title="Edit Goal"
+                     >
+                        <PencilIcon class="w-3.5 h-3.5" />
+                     </button>
+                     <button 
+                        v-if="currentTimeframe === 'daily' && !goal.completed"
+                        @click="deferGoal(goal, idx)"
+                        class="p-1 text-gray-500 hover:text-yellow-400 transition-colors"
+                        title="Defer to tomorrow"
+                     >
+                        <TimerIcon class="w-4 h-4" />
+                     </button>
+                     <button 
+                        @click="deleteGoal(idx)"
+                        class="p-1 text-gray-500 hover:text-red-400 transition-colors"
+                     >
+                        <Trash2Icon class="w-4 h-4" />
+                     </button>
+                  </div>
                 </div>
                 
                 <div class="flex-1 min-w-0">
@@ -247,7 +270,44 @@
           class="relative w-full max-w-sm rounded-t-2xl sm:rounded-2xl p-6 shadow-2xl border-t border-gray-800 animate-slide-up"
           :style="{ backgroundColor: currentTheme.colors.surface }"
         >
-          <h3 class="text-lg font-bold mb-4">Add New Goal</h3>
+          <div class="flex justify-between items-center mb-4">
+            <h3 class="text-lg font-bold">{{ editingGoalId ? 'Edit Goal' : 'Add New Goal' }}</h3>
+            <button 
+               v-if="!editingGoalId"
+               @click="showTemplates = !showTemplates"
+               class="text-xs px-2 py-1 rounded-full border border-gray-700 text-gray-400 hover:text-white hover:border-gray-500 transition-colors flex items-center gap-1"
+            >
+              <LightbulbIcon class="w-3 h-3" />
+              {{ showTemplates ? 'Custom Goal' : 'Need Ideas?' }}
+            </button>
+          </div>
+          
+          <!-- Template Picker -->
+          <div v-if="showTemplates" class="mb-4 space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+             <div v-for="category in templateCategories" :key="category.name" class="space-y-2">
+               <h4 class="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1">
+                 <span>{{ category.icon }}</span> {{ category.name }}
+               </h4>
+               <div class="grid grid-cols-1 gap-2">
+                 <button 
+                   v-for="template in category.goals" 
+                   :key="template.text"
+                   @click="applyTemplate(template)"
+                   class="flex items-center gap-3 p-3 rounded-lg border border-gray-800 hover:bg-gray-800/50 text-left transition-all group"
+                   :style="{ backgroundColor: currentTheme.colors.background }"
+                 >
+                   <span class="text-xl">{{ template.icon }}</span>
+                   <div class="flex-1">
+                     <p class="text-sm font-medium text-gray-200 group-hover:text-white">{{ template.text }}</p>
+                     <p class="text-[10px] text-gray-500">{{ template.category }}</p>
+                   </div>
+                   <PlusIcon class="w-4 h-4 text-gray-600 group-hover:text-white" />
+                 </button>
+               </div>
+             </div>
+          </div>
+
+          <div v-else>
           <input 
             ref="goalInput"
             v-model="newGoalText"
@@ -319,6 +379,7 @@
               Save
             </button>
           </div>
+          </div> <!-- End v-else -->
         </div>
       </div>
 
@@ -444,6 +505,53 @@
                   {{ isConnected ? 'Connected to Firebase' : 'Offline Mode' }}
                 </p>
              </div>
+
+             <!-- Template Management -->
+             <div class="p-4 rounded-lg border border-gray-800" :style="{ backgroundColor: currentTheme.colors.background }">
+                <div class="flex justify-between items-center mb-3">
+                   <h4 class="font-medium text-sm text-gray-300">Goal Templates</h4>
+                   <button @click="resetTemplatesToDefaults" class="text-[10px] text-red-400 hover:text-red-300">Reset Defaults</button>
+                </div>
+                
+                <div class="space-y-4">
+                  <!-- Add New Template -->
+                  <div class="flex flex-col gap-2">
+                     <input v-model="newTemplateText" placeholder="New template text" class="w-full bg-gray-900 border border-gray-700 rounded px-3 py-1.5 text-xs text-white focus:outline-none focus:border-gray-500">
+                     <div class="flex gap-2">
+                        <select v-model="newTemplateCategory" class="flex-1 bg-gray-900 border border-gray-700 rounded px-3 py-1.5 text-xs text-white focus:outline-none focus:border-gray-500">
+                           <option value="" disabled>Select Category</option>
+                           <option v-for="cat in categories" :key="cat" :value="cat">{{ cat }}</option>
+                        </select>
+                        <input v-model="newTemplateIcon" placeholder="Icon" class="w-12 text-center bg-gray-900 border border-gray-700 rounded px-1 py-1.5 text-xs text-white focus:outline-none focus:border-gray-500">
+                        <button 
+                           @click="handleAddTemplate"
+                           class="px-3 py-1.5 rounded text-xs font-medium text-white transition-opacity hover:opacity-90"
+                           :style="{ backgroundColor: currentTheme.colors.primary }"
+                           :disabled="!newTemplateText.trim() || !newTemplateCategory"
+                        >
+                           Add
+                        </button>
+                     </div>
+                  </div>
+
+                  <!-- Existing Templates List -->
+                  <div class="space-y-3">
+                     <div v-for="(cat, idx) in templateCategories" :key="cat.name" class="border-t border-gray-700/50 pt-2">
+                        <div class="flex justify-between items-center mb-1">
+                           <span class="text-xs font-bold text-gray-400">{{ cat.icon }} {{ cat.name }}</span>
+                        </div>
+                        <div class="space-y-1">
+                           <div v-for="(t, tIdx) in cat.goals" :key="tIdx" class="flex justify-between items-center group py-0.5">
+                              <span class="text-xs text-gray-300 truncate pr-2">{{ t.icon }} {{ t.text }}</span>
+                              <button @click="deleteTemplate(idx, tIdx)" class="text-gray-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                                 <Trash2Icon class="w-3 h-3" />
+                              </button>
+                           </div>
+                        </div>
+                     </div>
+                  </div>
+                </div>
+             </div>
            </div>
 
           <button 
@@ -465,7 +573,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { useDateFormat, useNow, useNetwork } from '@vueuse/core'
-import { PlusIcon, CheckIcon, Trash2Icon, SettingsIcon, TargetIcon, LogInIcon, LogOutIcon, ChevronLeftIcon, ChevronRightIcon, AlertCircleIcon, FileTextIcon, MoreHorizontalIcon } from 'lucide-vue-next'
+import { PlusIcon, CheckIcon, Trash2Icon, SettingsIcon, TargetIcon, LogInIcon, LogOutIcon, ChevronLeftIcon, ChevronRightIcon, AlertCircleIcon, FileTextIcon, MoreHorizontalIcon, LightbulbIcon, TimerIcon, PencilIcon } from 'lucide-vue-next'
 import dayjs from 'dayjs'
 import isoWeek from 'dayjs/plugin/isoWeek'
 import quarterOfYear from 'dayjs/plugin/quarterOfYear'
@@ -474,6 +582,7 @@ import { useStreaks } from '~/composables/useStreaks'
 import { useTheme } from '~/composables/useTheme'
 import { useSettings } from '~/composables/useSettings'
 import StreakBadge from '~/components/StreakBadge.vue'
+import { GOAL_TEMPLATES, type GoalTemplate } from '~/utils/goalTemplates'
 
 dayjs.extend(isoWeek)
 dayjs.extend(quarterOfYear)
@@ -482,7 +591,8 @@ dayjs.extend(quarterOfYear)
 const { user, loading: authLoading, authError, isLoggedIn, displayName, photoURL, email, login, logout, getIdToken, initAuth, clearError } = useAuth()
 const { stats, fetchStats, recordDailyCompletion, BADGES } = useStreaks()
 const { themes, currentTheme, setTheme, initTheme } = useTheme()
-const { categories, fetchSettings, addCategory, removeCategory } = useSettings()
+const { categories, fetchSettings, addCategory, removeCategory, templates, updateTemplates, resetTemplatesToDefaults } = useSettings()
+const { quote, fetchRandomQuote, loading: quoteLoading } = useQuotes()
 const showUserMenu = ref(false)
 
 // Login form
@@ -537,6 +647,8 @@ const timeframes = [
 const currentTimeframe = ref('daily')
 const showModal = ref(false)
 const showSettings = ref(false)
+const showTemplates = ref(false)
+const templateCategories = templates
 
 // New Goal State
 const newGoalText = ref('')
@@ -545,7 +657,11 @@ const newGoalPriority = ref('medium')
 const newGoalCategory = ref('')
 const newGoalNotes = ref('')
 const newCategoryInput = ref('')
+const newTemplateText = ref('')
+const newTemplateCategory = ref('')
+const newTemplateIcon = ref('✨')
 const selectedDate = ref(dayjs().format('YYYY-MM-DD'))
+const editingGoalId = ref<string | null>(null)
 
 const goalInput = ref<HTMLInputElement | null>(null)
 const goalData = ref<Record<string, any>>({})
@@ -634,6 +750,83 @@ async function handleAddCategory() {
     newCategoryInput.value = ''
 }
 
+async function handleAddTemplate() {
+    if (!newTemplateText.value.trim() || !newTemplateCategory.value) return
+    
+    const newTemplate: GoalTemplate = {
+        text: newTemplateText.value.trim(),
+        category: newTemplateCategory.value,
+        icon: newTemplateIcon.value || '✨'
+    }
+
+    const currentTemplates = [...templates.value]
+    // Find or create category
+    // Note: TemplateCategory.name matches our Settings Categories generally, but they can be distinct. 
+    // For simplicity, let's look for a matching TemplateCategory by name, or create one.
+    let catIndex = currentTemplates.findIndex(c => c.name === newTemplateCategory.value)
+    
+    if (catIndex === -1) {
+        // Create new category group
+        currentTemplates.push({
+            name: newTemplateCategory.value,
+            icon: '📂',
+            goals: [newTemplate]
+        })
+    } else {
+        // Add to existing
+        currentTemplates[catIndex].goals.push(newTemplate)
+    }
+
+    await updateTemplates(currentTemplates)
+    newTemplateText.value = ''
+    newTemplateIcon.value = '✨'
+}
+
+async function deleteTemplate(catIdx: number, goalIdx: number) {
+    if (!confirm('Delete this template?')) return
+    
+    const currentTemplates = JSON.parse(JSON.stringify(templates.value))
+    currentTemplates[catIdx].goals.splice(goalIdx, 1)
+    
+    // Remove empty category if needed
+    if (currentTemplates[catIdx].goals.length === 0) {
+        currentTemplates.splice(catIdx, 1)
+    }
+    
+    await updateTemplates(currentTemplates)
+}
+
+async function deferGoal(goal: any, idx: number) {
+    if (!confirm('Defer this goal to tomorrow?')) return
+
+    const sourceDate = selectedDate.value
+    const targetDate = dayjs(sourceDate).add(1, 'day').format('YYYY-MM-DD')
+    
+    // Optimistic UI update
+    const goals = goalData.value['daily'].goals
+    goals.splice(idx, 1)
+
+    try {
+        const token = await getIdToken()
+        await $fetch('/api/goals.defer', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`
+            },
+            body: {
+                goal,
+                sourceDate,
+                targetDate,
+                timeframe: 'daily'
+            }
+        })
+    } catch (e) {
+        console.error('Defer failed', e)
+        // Revert optimistic update? For now, just refresh
+        fetchAllData()
+    }
+}
+
 // --- METHODS ---
 function navigateDate(direction: number) {
     let unit: any = 'day'
@@ -673,15 +866,34 @@ function getProgressText(key: string) {
     return goals.length > 0 ? `${completed}/${goals.length}` : '0/0'
 }
 
-function openAddModal() {
+function openAddModal(goalToEdit?: any) {
+    if (goalToEdit) {
+        editingGoalId.value = goalToEdit.id
+        newGoalText.value = goalToEdit.text
+        newGoalDescription.value = goalToEdit.description || ''
+        newGoalPriority.value = goalToEdit.priority || 'medium'
+        newGoalCategory.value = goalToEdit.category || ''
+        newGoalNotes.value = goalToEdit.notes || ''
+    } else {
+        editingGoalId.value = null
+        newGoalText.value = ''
+        newGoalDescription.value = ''
+        newGoalPriority.value = 'medium'
+        newGoalCategory.value = ''
+        newGoalNotes.value = ''
+    }
     showModal.value = true
-    newGoalText.value = ''
-    newGoalDescription.value = ''
-    newGoalDescription.value = ''
-    newGoalPriority.value = 'medium'
-    newGoalCategory.value = ''
-    newGoalNotes.value = ''
+    showTemplates.value = false
     setTimeout(() => goalInput.value?.focus(), 100)
+}
+
+function applyTemplate(template: GoalTemplate) {
+    newGoalText.value = template.text
+    newGoalCategory.value = template.category
+    newGoalPriority.value = 'medium'
+    newGoalDescription.value = ''
+    showTemplates.value = false
+    // Automatically focus notes or just ready to save
 }
 
 function toggleGoal(idx: number) {
@@ -714,24 +926,55 @@ async function saveNewGoal() {
     const key = currentTimeframe.value
     if (!goalData.value[key]) goalData.value[key] = { goals: [] }
     
-    const goals = goalData.value[key].goals
-    const newId = goals.length > 0
-        ? String(Math.max(...goals.map((g: any) => parseInt(g.id) || 0)) + 1)
-        : '1'
-        
-    goals.push({
-        id: newId,
-        text: newGoalText.value.trim(),
-        description: newGoalDescription.value.trim(),
-        priority: newGoalPriority.value,
-        category: newGoalCategory.value.trim(),
-        notes: newGoalNotes.value.trim(),
-        status: 'todo',
-        completed: false
-    })
+    // Check if updating existing
+    if (editingGoalId.value) {
+        const goals = goalData.value[key].goals
+        const goalIndex = goals.findIndex((g: any) => g.id === editingGoalId.value)
+        if (goalIndex !== -1) {
+             goals[goalIndex] = {
+                 ...goals[goalIndex],
+                 text: newGoalText.value.trim(),
+                 description: newGoalDescription.value.trim(),
+                 priority: newGoalPriority.value,
+                 category: newGoalCategory.value.trim(),
+                 notes: newGoalNotes.value.trim(),
+                 updatedAt: new Date().toISOString()
+             }
+        }
+    } else {
+        // Create new
+        const goals = goalData.value[key].goals
+        const newId = goals.length > 0
+            ? String(Math.max(...goals.map((g: any) => parseInt(g.id) || 0)) + 1)
+            : '1'
+            
+        goals.push({
+            id: newId,
+            text: newGoalText.value.trim(),
+            description: newGoalDescription.value.trim(),
+            priority: newGoalPriority.value,
+            category: newGoalCategory.value.trim(),
+            notes: newGoalNotes.value.trim(),
+            status: 'todo',
+            completed: false,
+            createdAt: new Date().toISOString()
+        })
+    }
     
     await saveLog(key)
+    if (key === 'daily') {
+        const goals = goalData.value[key].goals
+        const allCompleted = goals.length > 0 && goals.every((g: any) => g.completed)
+        recordDailyCompletion(selectedDate.value, allCompleted)
+    }
+
     showModal.value = false
+    editingGoalId.value = null
+    newGoalText.value = ''
+    newGoalDescription.value = ''
+    newGoalPriority.value = 'medium'
+    newGoalCategory.value = ''
+    newGoalNotes.value = ''
 }
 
 // Watch for auth changes to fetch data
@@ -746,6 +989,7 @@ watch(isLoggedIn, (loggedIn) => {
 onMounted(() => {
     initAuth()
     initTheme()
+    fetchRandomQuote()
 })
 </script>
 

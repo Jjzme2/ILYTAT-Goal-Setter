@@ -63,5 +63,28 @@ export default defineNuxtConfig({
   modules: [
     '@nuxtjs/tailwindcss',
     '@vueuse/nuxt'
-  ]
+  ],
+
+  // Performance Optimizations
+  sourcemap: {
+    server: false,
+    client: false
+  },
+
+  tailwindcss: {
+    viewer: false
+  },
+
+  vite: {
+    optimizeDeps: {
+      include: [
+        'firebase/app',
+        'firebase/auth',
+        'firebase/firestore',
+        'dayjs',
+        'dayjs/plugin/isoWeek',
+        'dayjs/plugin/quarterOfYear'
+      ]
+    }
+  }
 })
