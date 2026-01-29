@@ -14,6 +14,8 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { TIMEFRAMES, TIMEFRAME_KEYS, getTimeframeConfig, APP_CONFIG } from './src/config.js';
+import * as cliAuth from './src/cliAuth.js';
+import { password } from '@inquirer/prompts'; // We need a password prompt
 dayjs.extend(isoWeek);
 dayjs.extend(quarterOfYear);
 // --- INIT FIREBASE ---
@@ -53,6 +55,7 @@ admin.initializeApp({
     credential: admin.credential.cert(serviceAccount)
 });
 const db = admin.firestore();
+let currentUser = null;
 // Color themes for chalk (derived from config)
 const CHALK_THEMES = {
     daily: chalk.cyan,
@@ -79,7 +82,14 @@ function getTimeframeLabel(timeframe) {
 function printHeader() {
     console.clear();
     console.log(chalk.bgBlue.white.bold(` ★ ${APP_CONFIG.name.toUpperCase()} ★ `));
-    console.log(chalk.gray(`${dayjs().format('dddd, MMMM D, YYYY')} • ${dayjs().format('h:mm A')}\n`));
+    const timeStr = `${dayjs().format('dddd, MMMM D, YYYY')} • ${dayjs().format('h:mm A')}`;
+    if (currentUser) {
+        console.log(chalk.gray(`${timeStr}`));
+        console.log(chalk.green(`👤 ${currentUser.email}\n`));
+    }
+    else {
+        console.log(chalk.gray(`${timeStr}\n`));
+    }
 }
 function printGoals(goals, timeframe) {
     const theme = CHALK_THEMES[timeframe];
@@ -139,9 +149,12 @@ function printProgressSummary(summaries) {
 }
 // --- DATA ACCESS ---
 async function getLog(timeframe) {
+    if (!currentUser)
+        return { docRef: null, data: null };
     const config = getTimeframeConfig(timeframe);
     const docId = getDocId(timeframe);
-    const docRef = db.collection(config.collection).doc(docId);
+    // User-scoped path: users/{uid}/{collection}/{docId}
+    const docRef = db.collection('users').doc(currentUser.uid).collection(config.collection).doc(docId);
     const doc = await docRef.get();
     return {
         docRef,
@@ -149,9 +162,12 @@ async function getLog(timeframe) {
     };
 }
 async function createLog(timeframe, goals, obstacle) {
+    if (!currentUser)
+        throw new Error('Not logged in');
     const config = getTimeframeConfig(timeframe);
     const docId = getDocId(timeframe);
-    const docRef = db.collection(config.collection).doc(docId);
+    // User-scoped path: users/{uid}/{collection}/{docId}
+    const docRef = db.collection('users').doc(currentUser.uid).collection(config.collection).doc(docId);
     const payload = {
         id: docId,
         date: new Date().toISOString(),
@@ -307,6 +323,26 @@ async function setObstacle(docRef, data) {
     console.log(chalk.green('\n✓ Obstacle updated'));
     await pause();
 }
+// --- AUTH ACTIONS ---
+async function handleLogin() {
+    const email = await input({ message: 'Email:' });
+    const pass = await password({ message: 'Password:' });
+    try {
+        console.log(chalk.dim('Authenticating...'));
+        currentUser = await cliAuth.login(email, pass);
+        console.log(chalk.green(`\n✓ Welcome back, ${currentUser.displayName || currentUser.email}!`));
+    }
+    catch (e) {
+        console.log(chalk.red(`\n✖ Login failed: ${e.message}`));
+    }
+    await pause();
+}
+async function handleLogout() {
+    cliAuth.logout();
+    currentUser = null;
+    console.log(chalk.green('\n✓ Logged out'));
+    await pause();
+}
 async function pause() {
     await new Promise(resolve => setTimeout(resolve, 800));
 }
@@ -392,35 +428,55 @@ async function showTimeframeMenu(timeframe) {
 async function showMainMenu() {
     while (true) {
         printHeader();
-        // Fetch all timeframe data
-        const results = await Promise.all(TIMEFRAME_KEYS.map(tf => getLog(tf)));
-        const summaries = TIMEFRAME_KEYS.map((tf, i) => ({ timeframe: tf, data: results[i].data }));
-        printProgressSummary(summaries);
-        // Build menu choices from config
-        const timeframeChoices = TIMEFRAMES.map(tf => ({
-            name: `${tf.icon}  ${CHALK_THEMES[tf.key](tf.label.padEnd(10))} ${chalk.dim('— ' + tf.description)}`,
-            value: tf.key
-        }));
-        const timeframe = await select({
+        let summaries = [];
+        if (currentUser) {
+            // Fetch all timeframe data if logged in
+            const results = await Promise.all(TIMEFRAME_KEYS.map(tf => getLog(tf)));
+            summaries = TIMEFRAME_KEYS.map((tf, i) => ({ timeframe: tf, data: results[i].data }));
+            printProgressSummary(summaries);
+        }
+        else {
+            console.log(chalk.yellow('\n⚠️  Please login to view your goals.\n'));
+            console.log(chalk.dim('─'.repeat(46) + '\n'));
+        }
+        // Build menu choices
+        const choices = [];
+        if (currentUser) {
+            const timeframeChoices = TIMEFRAMES.map(tf => ({
+                name: `${tf.icon}  ${CHALK_THEMES[tf.key](tf.label.padEnd(10))} ${chalk.dim('— ' + tf.description)}`,
+                value: tf.key
+            }));
+            choices.push({ name: chalk.white.bold('👁️  Quick Preview') + chalk.dim('  — View all goals'), value: 'preview' });
+            choices.push(...timeframeChoices);
+            choices.push({ name: chalk.dim('🚪 Logout'), value: 'logout' });
+        }
+        else {
+            choices.push({ name: chalk.green.bold('🔐 Login'), value: 'login' });
+        }
+        choices.push({ name: chalk.dim('✖ Exit'), value: 'exit' });
+        const action = await select({
             message: chalk.bold.white('Select option:'),
-            choices: [
-                { name: chalk.white.bold('👁️  Quick Preview') + chalk.dim('  — View all goals'), value: 'preview' },
-                ...timeframeChoices,
-                { name: chalk.dim('✖ Exit'), value: 'exit' }
-            ]
+            choices
         });
-        if (timeframe === 'exit') {
+        if (action === 'exit') {
             console.log(chalk.green.bold('\n★ Stay focused. Execute. ★\n'));
             process.exit(0);
         }
-        if (timeframe === 'preview') {
+        if (action === 'login') {
+            await handleLogin();
+            continue;
+        }
+        if (action === 'logout') {
+            await handleLogout();
+            continue;
+        }
+        if (action === 'preview') {
             await showQuickPreview(summaries);
             continue;
         }
-        if (!TIMEFRAME_KEYS.includes(timeframe)) {
-            continue;
+        if (currentUser && TIMEFRAME_KEYS.includes(action)) {
+            await showTimeframeMenu(action);
         }
-        await showTimeframeMenu(timeframe);
     }
 }
 // --- QUICK PREVIEW ---
@@ -456,6 +512,8 @@ async function showQuickPreview(summaries) {
 // --- MAIN ---
 async function main() {
     try {
+        // Init Auth
+        currentUser = await cliAuth.getValidAuth();
         await showMainMenu();
     }
     catch (error) {

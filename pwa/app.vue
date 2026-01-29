@@ -54,7 +54,17 @@
             </button>
           </div>
         </div>
-        <p class="text-sm text-gray-400 font-medium">{{ formattedDate }}</p>
+      <div class="flex items-center justify-between mb-2 px-1">
+        <button @click="navigateDate(-1)" class="p-1 hover:bg-gray-800/50 rounded-full text-gray-400 hover:text-white transition-colors">
+          <ChevronLeftIcon class="w-5 h-5" />
+        </button>
+        <p class="text-sm text-gray-400 font-medium select-none cursor-pointer hover:text-white transition-colors" @click="resetDate">
+          {{ formattedDate }}
+        </p>
+        <button @click="navigateDate(1)" class="p-1 hover:bg-gray-800/50 rounded-full text-gray-400 hover:text-white transition-colors">
+          <ChevronRightIcon class="w-5 h-5" />
+        </button>
+      </div>
       </header>
 
       <!-- Login Form -->
@@ -187,13 +197,29 @@
               </button>
               
               <div class="flex-1 min-w-0">
-                <p 
-                  class="text-sm leading-relaxed transition-all decoration-2 decoration-gray-500"
-                  :class="{ 'line-through text-gray-500': goal.completed, 'text-gray-200': !goal.completed }"
-                >
-                  {{ goal.text }}
-                </p>
-              </div>
+                  <p 
+                    class="text-sm leading-relaxed transition-all decoration-2 decoration-gray-500"
+                    :class="{ 'line-through text-gray-500': goal.completed, 'text-gray-200': !goal.completed }"
+                  >
+                    {{ goal.text }}
+                  </p>
+                  <div class="flex items-center gap-2 mt-1">
+                      <span 
+                        v-if="goal.priority && goal.priority !== 'medium'"
+                        class="text-[10px] px-1.5 py-0.5 rounded uppercase font-bold tracking-wider"
+                        :class="goal.priority === 'high' ? 'bg-red-500/20 text-red-400' : 'bg-green-500/20 text-green-400'"
+                      >
+                        {{ goal.priority }}
+                      </span>
+                      <span 
+                        v-if="goal.category"
+                        class="text-[10px] px-1.5 py-0.5 rounded border border-gray-700 text-gray-400"
+                      >
+                        {{ goal.category }}
+                      </span>
+                      <p v-if="goal.description" class="text-xs text-gray-500 line-clamp-1">{{ goal.description }}</p>
+                  </div>
+                </div>
 
               <button 
                 @click="deleteGoal(idx)"
@@ -229,6 +255,51 @@
             :style="{ backgroundColor: currentTheme.colors.background, '--tw-ring-color': currentTheme.colors.primary }"
             placeholder="What do you want to achieve?"
           >
+
+          <textarea
+            v-model="newGoalDescription"
+            rows="2"
+            class="w-full border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:ring-2 transition-all mb-4 text-sm"
+            :style="{ backgroundColor: currentTheme.colors.background, '--tw-ring-color': currentTheme.colors.primary }"
+            placeholder="Description (optional)"
+          ></textarea>
+
+          <div class="mb-4">
+            <label class="text-xs text-gray-500 font-medium mb-2 block">Category</label>
+            <input 
+              v-model="newGoalCategory"
+              type="text" 
+              class="w-full border border-gray-700 rounded-lg px-4 py-2 text-white placeholder-gray-600 focus:outline-none focus:ring-2 transition-all mb-2 text-sm"
+              :style="{ backgroundColor: currentTheme.colors.background, '--tw-ring-color': currentTheme.colors.primary }"
+              placeholder="e.g. Work, Family, Health..."
+            >
+            <div class="flex flex-wrap gap-2">
+                <button 
+                    v-for="cat in ['Work', 'Personal', 'Family', 'Health']"
+                    :key="cat"
+                    @click="newGoalCategory = cat"
+                    class="px-2 py-1 rounded text-[10px] font-medium border border-gray-700 hover:bg-gray-800 transition-colors text-gray-400"
+                >
+                    {{ cat }}
+                </button>
+            </div>
+          </div>
+
+          <div class="mb-4">
+            <label class="text-xs text-gray-500 font-medium mb-2 block">Priority</label>
+            <div class="flex gap-2">
+                <button 
+                    v-for="p in ['low', 'medium', 'high']" 
+                    :key="p"
+                    @click="newGoalPriority = p"
+                    class="flex-1 py-2 rounded-lg text-xs font-medium capitalize border transition-all"
+                    :class="newGoalPriority === p ? 'border-transparent text-white' : 'border-gray-700 text-gray-400 hover:border-gray-600'"
+                    :style="newGoalPriority === p ? { backgroundColor: p === 'high' ? '#EF4444' : p === 'medium' ? '#F59E0B' : '#10B981' } : {}"
+                >
+                    {{ p }}
+                </button>
+            </div>
+          </div>
           <div class="flex gap-3">
             <button 
               @click="showModal = false"
@@ -355,7 +426,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { useDateFormat, useNow, useNetwork } from '@vueuse/core'
-import { PlusIcon, CheckIcon, Trash2Icon, SettingsIcon, TargetIcon, LogInIcon, LogOutIcon } from 'lucide-vue-next'
+import { PlusIcon, CheckIcon, Trash2Icon, SettingsIcon, TargetIcon, LogInIcon, LogOutIcon, ChevronLeftIcon, ChevronRightIcon, AlertCircleIcon, FileTextIcon, MoreHorizontalIcon } from 'lucide-vue-next'
 import dayjs from 'dayjs'
 import isoWeek from 'dayjs/plugin/isoWeek'
 import quarterOfYear from 'dayjs/plugin/quarterOfYear'
@@ -425,15 +496,42 @@ const timeframes = [
 const currentTimeframe = ref('daily')
 const showModal = ref(false)
 const showSettings = ref(false)
+
+// New Goal State
 const newGoalText = ref('')
+const newGoalDescription = ref('')
+const newGoalPriority = ref('medium')
+const newGoalCategory = ref('')
+const newGoalNotes = ref('')
+const selectedDate = ref(dayjs().format('YYYY-MM-DD'))
+
 const goalInput = ref<HTMLInputElement | null>(null)
 const goalData = ref<Record<string, any>>({})
 const { isOnline } = useNetwork()
 
 // --- COMPUTED ---
-const formattedDate = useDateFormat(useNow(), 'dddd, MMMM D, YYYY')
-const isConnected = computed(() => isOnline.value)
+// --- COMPUTED ---
+const formattedDate = computed(() => {
+    const d = dayjs(selectedDate.value)
+    switch (currentTimeframe.value) {
+        case 'weekly':
+            const start = d.startOf('isoWeek')
+            const end = d.endOf('isoWeek')
+            return `Week ${d.isoWeek()}, ${d.year()} (${start.format('MMM D')} - ${end.format('MMM D')})`
+        case 'monthly':
+            return d.format('MMMM YYYY')
+        case 'quarterly':
+            const qStart = d.startOf('quarter')
+            const qEnd = d.endOf('quarter')
+            return `Q${d.quarter()} ${d.year()} (${qStart.format('MMM D')} - ${qEnd.format('MMM D')})`
+        case 'yearly':
+            return d.format('YYYY')
+        default:
+            return d.format('dddd, MMMM D, YYYY')
+    }
+})
 
+const isConnected = computed(() => isOnline.value)
 const currentTimeframeConfig = computed(() => timeframes.find(t => t.key === currentTimeframe.value)!)
 
 const currentGoals = computed(() => {
@@ -446,14 +544,20 @@ async function fetchAllData() {
     if (!isLoggedIn.value) return
     
     try {
+        console.time('fetchAllData')
         const token = await getIdToken()
         const data = await $fetch('/api/goals', {
             headers: {
                 'Authorization': `Bearer ${token}`
+            },
+            query: {
+                date: selectedDate.value
             }
         })
         goalData.value = data as Record<string, any>
+        console.timeEnd('fetchAllData')
     } catch (e) {
+        console.timeEnd('fetchAllData')
         console.error('Error fetching data', e)
     }
 }
@@ -471,7 +575,11 @@ async function saveLog(timeframe: string) {
             headers: {
                 'Authorization': `Bearer ${token}`
             },
-            body: { timeframe, data }
+            body: { 
+                timeframe, 
+                data,
+                date: selectedDate.value
+            }
         })
     } catch (e) {
         console.error('Error saving', e)
@@ -479,9 +587,30 @@ async function saveLog(timeframe: string) {
 }
 
 // --- METHODS ---
+function navigateDate(direction: number) {
+    let unit: any = 'day'
+    
+    switch (currentTimeframe.value) {
+        case 'weekly': unit = 'week'; break;
+        case 'monthly': unit = 'month'; break;
+        case 'quarterly': unit = 'quarter'; break;
+        case 'yearly': unit = 'year'; break;
+    }
+
+    selectedDate.value = dayjs(selectedDate.value).add(direction, unit).format('YYYY-MM-DD')
+    fetchAllData()
+}
+
+function resetDate() {
+    selectedDate.value = dayjs().format('YYYY-MM-DD')
+    fetchAllData()
+}
+
 function selectTimeframe(key: string) {
     currentTimeframe.value = key
 }
+
+
 
 function getProgressPercent(key: string) {
     const goals = goalData.value[key]?.goals || []
@@ -498,6 +627,12 @@ function getProgressText(key: string) {
 
 function openAddModal() {
     showModal.value = true
+    newGoalText.value = ''
+    newGoalDescription.value = ''
+    newGoalDescription.value = ''
+    newGoalPriority.value = 'medium'
+    newGoalCategory.value = ''
+    newGoalNotes.value = ''
     setTimeout(() => goalInput.value?.focus(), 100)
 }
 
@@ -511,8 +646,8 @@ function toggleGoal(idx: number) {
     if (key === 'daily') {
         const goals = goalData.value[key].goals
         const allCompleted = goals.length > 0 && goals.every((g: any) => g.completed)
-        const today = dayjs().format('YYYY-MM-DD')
-        recordDailyCompletion(today, allCompleted)
+        // Record completion for the SELECTED date, not necessarily today
+        recordDailyCompletion(selectedDate.value, allCompleted)
     }
 }
 
@@ -539,11 +674,15 @@ async function saveNewGoal() {
     goals.push({
         id: newId,
         text: newGoalText.value.trim(),
+        description: newGoalDescription.value.trim(),
+        priority: newGoalPriority.value,
+        category: newGoalCategory.value.trim(),
+        notes: newGoalNotes.value.trim(),
+        status: 'todo',
         completed: false
     })
     
     await saveLog(key)
-    newGoalText.value = ''
     showModal.value = false
 }
 

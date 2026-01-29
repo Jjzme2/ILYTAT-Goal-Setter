@@ -3,6 +3,14 @@ export default defineNuxtConfig({
   compatibilityDate: '2025-01-27',
   devtools: { enabled: false },
 
+  devServer: {
+    port: 4000
+  },
+
+
+  experimental: {
+    appManifest: false
+  },
 
   // SEO and App Metadata
   app: {

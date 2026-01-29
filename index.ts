@@ -15,6 +15,8 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { TIMEFRAMES, TIMEFRAME_KEYS, getTimeframeConfig, APP_CONFIG, type TimeFrame } from './src/config.js';
+import * as cliAuth from './src/cliAuth.js';
+import { password } from '@inquirer/prompts'; // We need a password prompt
 
 dayjs.extend(isoWeek);
 dayjs.extend(quarterOfYear);
@@ -57,6 +59,7 @@ admin.initializeApp({
 });
 
 const db = admin.firestore();
+let currentUser: cliAuth.StoredAuth | null = null;
 
 // --- TYPES ---
 interface IGoal {
@@ -103,7 +106,14 @@ function getTimeframeLabel(timeframe: TimeFrame): string {
 function printHeader() {
     console.clear();
     console.log(chalk.bgBlue.white.bold(` ★ ${APP_CONFIG.name.toUpperCase()} ★ `));
-    console.log(chalk.gray(`${dayjs().format('dddd, MMMM D, YYYY')} • ${dayjs().format('h:mm A')}\n`));
+    const timeStr = `${dayjs().format('dddd, MMMM D, YYYY')} • ${dayjs().format('h:mm A')}`;
+
+    if (currentUser) {
+        console.log(chalk.gray(`${timeStr}`));
+        console.log(chalk.green(`👤 ${currentUser.email}\n`));
+    } else {
+        console.log(chalk.gray(`${timeStr}\n`));
+    }
 }
 
 function printGoals(goals: IGoal[], timeframe: TimeFrame) {
@@ -169,9 +179,12 @@ function printProgressSummary(summaries: Array<{ timeframe: TimeFrame; data: ILo
 
 // --- DATA ACCESS ---
 async function getLog(timeframe: TimeFrame): Promise<{ docRef: admin.firestore.DocumentReference; data: ILog | null }> {
+    if (!currentUser) return { docRef: null as any, data: null };
+
     const config = getTimeframeConfig(timeframe);
     const docId = getDocId(timeframe);
-    const docRef = db.collection(config.collection).doc(docId);
+    // User-scoped path: users/{uid}/{collection}/{docId}
+    const docRef = db.collection('users').doc(currentUser.uid).collection(config.collection).doc(docId);
     const doc = await docRef.get();
     return {
         docRef,
@@ -180,9 +193,12 @@ async function getLog(timeframe: TimeFrame): Promise<{ docRef: admin.firestore.D
 }
 
 async function createLog(timeframe: TimeFrame, goals: IGoal[], obstacle?: string): Promise<void> {
+    if (!currentUser) throw new Error('Not logged in');
+
     const config = getTimeframeConfig(timeframe);
     const docId = getDocId(timeframe);
-    const docRef = db.collection(config.collection).doc(docId);
+    // User-scoped path: users/{uid}/{collection}/{docId}
+    const docRef = db.collection('users').doc(currentUser.uid).collection(config.collection).doc(docId);
 
     const payload: ILog = {
         id: docId,
@@ -369,6 +385,28 @@ async function setObstacle(docRef: admin.firestore.DocumentReference, data: ILog
     await pause();
 }
 
+// --- AUTH ACTIONS ---
+async function handleLogin(): Promise<void> {
+    const email = await input({ message: 'Email:' });
+    const pass = await password({ message: 'Password:' });
+
+    try {
+        console.log(chalk.dim('Authenticating...'));
+        currentUser = await cliAuth.login(email, pass);
+        console.log(chalk.green(`\n✓ Welcome back, ${currentUser.displayName || currentUser.email}!`));
+    } catch (e: any) {
+        console.log(chalk.red(`\n✖ Login failed: ${e.message}`));
+    }
+    await pause();
+}
+
+async function handleLogout(): Promise<void> {
+    cliAuth.logout();
+    currentUser = null;
+    console.log(chalk.green('\n✓ Logged out'));
+    await pause();
+}
+
 async function pause(): Promise<void> {
     await new Promise(resolve => setTimeout(resolve, 800));
 }
@@ -462,44 +500,64 @@ async function showMainMenu(): Promise<void> {
     while (true) {
         printHeader();
 
-        // Fetch all timeframe data
-        const results = await Promise.all(TIMEFRAME_KEYS.map(tf => getLog(tf)));
+        let summaries: Array<{ timeframe: TimeFrame; data: ILog | null }> = [];
 
-        const summaries: Array<{ timeframe: TimeFrame; data: ILog | null }> =
-            TIMEFRAME_KEYS.map((tf, i) => ({ timeframe: tf, data: results[i]!.data }));
+        if (currentUser) {
+            // Fetch all timeframe data if logged in
+            const results = await Promise.all(TIMEFRAME_KEYS.map(tf => getLog(tf)));
+            summaries = TIMEFRAME_KEYS.map((tf, i) => ({ timeframe: tf, data: results[i]!.data }));
+            printProgressSummary(summaries);
+        } else {
+            console.log(chalk.yellow('\n⚠️  Please login to view your goals.\n'));
+            console.log(chalk.dim('─'.repeat(46) + '\n'));
+        }
 
-        printProgressSummary(summaries);
+        // Build menu choices
+        const choices: any[] = [];
 
-        // Build menu choices from config
-        const timeframeChoices = TIMEFRAMES.map(tf => ({
-            name: `${tf.icon}  ${CHALK_THEMES[tf.key](tf.label.padEnd(10))} ${chalk.dim('— ' + tf.description)}`,
-            value: tf.key
-        }));
+        if (currentUser) {
+            const timeframeChoices = TIMEFRAMES.map(tf => ({
+                name: `${tf.icon}  ${CHALK_THEMES[tf.key](tf.label.padEnd(10))} ${chalk.dim('— ' + tf.description)}`,
+                value: tf.key
+            }));
 
-        const timeframe = await select<string>({
+            choices.push({ name: chalk.white.bold('👁️  Quick Preview') + chalk.dim('  — View all goals'), value: 'preview' });
+            choices.push(...timeframeChoices);
+            choices.push({ name: chalk.dim('🚪 Logout'), value: 'logout' });
+        } else {
+            choices.push({ name: chalk.green.bold('🔐 Login'), value: 'login' });
+        }
+
+        choices.push({ name: chalk.dim('✖ Exit'), value: 'exit' });
+
+        const action = await select<string>({
             message: chalk.bold.white('Select option:'),
-            choices: [
-                { name: chalk.white.bold('👁️  Quick Preview') + chalk.dim('  — View all goals'), value: 'preview' },
-                ...timeframeChoices,
-                { name: chalk.dim('✖ Exit'), value: 'exit' }
-            ]
+            choices
         });
 
-        if (timeframe === 'exit') {
+        if (action === 'exit') {
             console.log(chalk.green.bold('\n★ Stay focused. Execute. ★\n'));
             process.exit(0);
         }
 
-        if (timeframe === 'preview') {
+        if (action === 'login') {
+            await handleLogin();
+            continue;
+        }
+
+        if (action === 'logout') {
+            await handleLogout();
+            continue;
+        }
+
+        if (action === 'preview') {
             await showQuickPreview(summaries);
             continue;
         }
 
-        if (!TIMEFRAME_KEYS.includes(timeframe as TimeFrame)) {
-            continue;
+        if (currentUser && TIMEFRAME_KEYS.includes(action as TimeFrame)) {
+            await showTimeframeMenu(action as TimeFrame);
         }
-
-        await showTimeframeMenu(timeframe as TimeFrame);
     }
 }
 
@@ -541,6 +599,8 @@ async function showQuickPreview(summaries: Array<{ timeframe: TimeFrame; data: I
 // --- MAIN ---
 async function main() {
     try {
+        // Init Auth
+        currentUser = await cliAuth.getValidAuth();
         await showMainMenu();
     } catch (error) {
         if ((error as Error).name === 'ExitPromptError') {

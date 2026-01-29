@@ -10,10 +10,10 @@
     "postinstall": "nuxt prepare"
   },
   "dependencies": {
-    "firebase": "^10.7.1",
-    "lucide-vue-next": "^0.300.0",
     "@vueuse/core": "^10.7.0",
     "dayjs": "^1.11.10",
+    "firebase": "^10.7.1",
+    "lucide-vue-next": "^0.300.0",
     "nuxt": "3.15.0",
     "vue": "^3.4.0",
     "vue-router": "^4.2.5"
@@ -21,10 +21,10 @@
   "devDependencies": {
     "@nuxtjs/tailwindcss": "^6.11.0",
     "@types/node": "^20.10.0",
-    "autoprefixer": "^10.4.16",
-    "postcss": "^8.4.32",
-    "tailwindcss": "^3.4.0",
     "@vueuse/nuxt": "^10.7.0",
-    "firebase-admin": "^12.0.0"
+    "autoprefixer": "^10.4.16",
+    "firebase-admin": "^12.0.0",
+    "postcss": "^8.4.32",
+    "tailwindcss": "^3.4.0"
   }
 }
