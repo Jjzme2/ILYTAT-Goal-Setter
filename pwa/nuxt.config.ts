@@ -3,6 +3,10 @@ export default defineNuxtConfig({
   compatibilityDate: '2025-01-27',
   devtools: { enabled: false },
 
+  alias: {
+    '@ilytat/common': './ilytat-common/index.ts'
+  },
+
   devServer: {
     port: 4000
   },

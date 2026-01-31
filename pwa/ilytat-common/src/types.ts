@@ -46,3 +46,5 @@ export interface AsciiArt {
     content: string;
     tags: string[];
 }
+
+export * from './types/goals';

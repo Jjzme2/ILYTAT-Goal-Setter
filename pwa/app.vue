@@ -189,13 +189,14 @@
               <div 
                 v-for="(goal, idx) in currentGoals" 
                 :key="goal.id"
-                class="group p-4 rounded-xl border border-gray-800/50 flex flex-col gap-3 transition-all hover:opacity-90 touch-manipulation h-full"
+                @click="openViewModal(goal)"
+                class="group p-4 rounded-xl border border-gray-800/50 flex flex-col gap-3 transition-all hover:opacity-90 touch-manipulation h-full cursor-pointer"
                 :class="{ 'opacity-60': goal.completed }"
                 :style="{ backgroundColor: currentTheme.colors.surface }"
               >
                 <div class="flex items-start justify-between w-full">
                   <button 
-                    @click="toggleGoal(idx)"
+                    @click.stop="toggleGoal(idx)"
                     class="mt-0.5 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors shrink-0"
                     :class="goal.completed ? 'bg-green-500 border-green-500 text-white' : 'border-gray-600 text-transparent hover:border-gray-400'"
                     :style="goal.completed ? {} : { borderColor: currentTimeframeConfig.color }"
@@ -205,7 +206,7 @@
                   
                   <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                      <button 
-                        @click="openAddModal(goal)"
+                        @click.stop="openAddModal(goal)"
                         class="p-1 text-gray-500 hover:text-blue-400 transition-colors"
                         title="Edit Goal"
                      >
@@ -213,14 +214,14 @@
                      </button>
                      <button 
                         v-if="currentTimeframe === 'daily' && !goal.completed"
-                        @click="deferGoal(goal, idx)"
+                        @click.stop="deferGoal(goal, idx)"
                         class="p-1 text-gray-500 hover:text-yellow-400 transition-colors"
                         title="Defer to tomorrow"
                      >
                         <TimerIcon class="w-4 h-4" />
                      </button>
                      <button 
-                        @click="deleteGoal(idx)"
+                        @click.stop="deleteGoal(idx)"
                         class="p-1 text-gray-500 hover:text-red-400 transition-colors"
                      >
                         <Trash2Icon class="w-4 h-4" />
@@ -380,6 +381,63 @@
             </button>
           </div>
           </div> <!-- End v-else -->
+        </div>
+      </div>
+
+      <!-- View Modal -->
+      <div v-if="showViewModal && viewingGoal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="showViewModal = false"></div>
+        <div 
+          class="relative w-full max-w-sm rounded-2xl p-6 shadow-2xl border border-gray-800 animate-slide-up"
+          :style="{ backgroundColor: currentTheme.colors.surface }"
+        >
+          <div class="flex justify-between items-start mb-6">
+            <h3 class="text-xl font-bold leading-tight pr-4">{{ viewingGoal.text }}</h3>
+            <button @click="showViewModal = false" class="text-gray-400 hover:text-white p-1">✕</button>
+          </div>
+          
+          <div class="space-y-4 max-h-[60vh] overflow-y-auto">
+             <div class="flex flex-wrap gap-2">
+                <span 
+                   class="text-xs px-2 py-1 rounded uppercase font-bold tracking-wider"
+                   :class="viewingGoal.priority === 'high' ? 'bg-red-500/20 text-red-400' : viewingGoal.priority === 'medium' ? 'bg-yellow-500/20 text-yellow-400' : 'bg-green-500/20 text-green-400'"
+                >
+                   {{ viewingGoal.priority }}
+                </span>
+                <span v-if="viewingGoal.category" class="text-xs px-2 py-1 rounded border border-gray-700 text-gray-300">
+                   {{ viewingGoal.category }}
+                </span>
+                <span v-if="viewingGoal.completed" class="text-xs px-2 py-1 rounded bg-green-900/30 text-green-400 border border-green-800">
+                    Completed
+                </span>
+             </div>
+             
+             <div v-if="viewingGoal.description" class="p-4 rounded-lg bg-gray-900/50 border border-gray-800">
+                <h4 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Description</h4>
+                <p class="text-sm text-gray-200 whitespace-pre-wrap leading-relaxed">{{ viewingGoal.description }}</p>
+             </div>
+
+             <div v-if="viewingGoal.notes" class="p-4 rounded-lg bg-gray-900/50 border border-gray-800">
+                <h4 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Notes</h4>
+                <p class="text-sm text-gray-200 whitespace-pre-wrap leading-relaxed">{{ viewingGoal.notes }}</p>
+             </div>
+             
+             <div class="pt-4 flex gap-3">
+                 <button 
+                    @click="showViewModal = false; openAddModal(viewingGoal)"
+                    class="flex-1 py-2 rounded-lg border border-gray-700 text-gray-300 hover:bg-gray-800 transition-colors text-sm font-medium"
+                 >
+                    Edit
+                 </button>
+                 <button 
+                    @click="showViewModal = false"
+                    class="flex-1 py-2 rounded-lg text-white font-medium hover:opacity-90 transition-colors text-sm"
+                    :style="{ backgroundColor: currentTheme.colors.primary }"
+                 >
+                    Close
+                 </button>
+             </div>
+          </div>
         </div>
       </div>
 
@@ -583,6 +641,7 @@ import { useTheme } from '~/composables/useTheme'
 import { useSettings } from '~/composables/useSettings'
 import StreakBadge from '~/components/StreakBadge.vue'
 import { GOAL_TEMPLATES, type GoalTemplate } from '~/utils/goalTemplates'
+import type { Goal } from '@ilytat/common'
 
 dayjs.extend(isoWeek)
 dayjs.extend(quarterOfYear)
@@ -662,6 +721,8 @@ const newTemplateCategory = ref('')
 const newTemplateIcon = ref('✨')
 const selectedDate = ref(dayjs().format('YYYY-MM-DD'))
 const editingGoalId = ref<string | null>(null)
+const showViewModal = ref(false)
+const viewingGoal = ref<Goal | null>(null)
 
 const goalInput = ref<HTMLInputElement | null>(null)
 const goalData = ref<Record<string, any>>({})
@@ -869,7 +930,7 @@ function getProgressText(key: string) {
 function openAddModal(goalToEdit?: any) {
     if (goalToEdit) {
         editingGoalId.value = goalToEdit.id
-        newGoalText.value = goalToEdit.text
+        newGoalText.value = goalToEdit.text || ''
         newGoalDescription.value = goalToEdit.description || ''
         newGoalPriority.value = goalToEdit.priority || 'medium'
         newGoalCategory.value = goalToEdit.category || ''
@@ -885,6 +946,11 @@ function openAddModal(goalToEdit?: any) {
     showModal.value = true
     showTemplates.value = false
     setTimeout(() => goalInput.value?.focus(), 100)
+}
+
+function openViewModal(goal: Goal) {
+    viewingGoal.value = goal
+    showViewModal.value = true
 }
 
 function applyTemplate(template: GoalTemplate) {
@@ -944,9 +1010,8 @@ async function saveNewGoal() {
     } else {
         // Create new
         const goals = goalData.value[key].goals
-        const newId = goals.length > 0
-            ? String(Math.max(...goals.map((g: any) => parseInt(g.id) || 0)) + 1)
-            : '1'
+        // Use UUID for new goals
+        const newId = crypto.randomUUID()
             
         goals.push({
             id: newId,
